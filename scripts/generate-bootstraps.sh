@@ -279,9 +279,13 @@ add_termux_bootstrap_second_stage_files() {
 # working directory.
 # Information about symlinks is stored in file SYMLINKS.txt.
 create_bootstrap_archive() {
-	echo "[*] Creating 'bootstrap-${1}.zip'..."
+	echo "[*] Creating 'bootstrap-${1}.tar.gz' and 'bootstrap-${1}.zip'..."
+	(cd "${BOOTSTRAP_ROOTFS}/${TERMUX_PREFIX}/.."
+		# Archive top-level usr directory into tar.gz with native symlinks & permissions
+		tar -czf "${BOOTSTRAP_TMPDIR}/bootstrap-${1}.tar.gz" usr/
+	)
 	(cd "${BOOTSTRAP_ROOTFS}/${TERMUX_PREFIX}"
-		# Do not store symlinks in bootstrap archive.
+		# Do not store symlinks in zip archive.
 		# Instead, put all information to SYMLINKS.txt
 		while read -r -d '' link; do
 			echo "$(readlink "$link")←${link}" >> SYMLINKS.txt
@@ -291,8 +295,10 @@ create_bootstrap_archive() {
 		zip -r9 "${BOOTSTRAP_TMPDIR}/bootstrap-${1}.zip" ./*
 	)
 
+	mv -f "${BOOTSTRAP_TMPDIR}/bootstrap-${1}.tar.gz" ./
 	mv -f "${BOOTSTRAP_TMPDIR}/bootstrap-${1}.zip" ./
-	echo "[*] Finished successfully (${1})."
+	sha256sum "bootstrap-${1}.tar.gz" > "bootstrap-${1}.tar.gz.sha256"
+	echo "[*] Finished successfully (${1}). Archive size: $(du -h "bootstrap-${1}.tar.gz" | cut -f1)"
 }
 
 show_usage() {
@@ -495,6 +501,25 @@ for package_arch in "${TERMUX_ARCHITECTURES[@]}"; do
 		pull_package "$add_pkg"
 	done
 	unset add_pkg
+
+	# Relocate packages from com.termux to target app package if needed
+	if [ -d "${BOOTSTRAP_ROOTFS}/data/data/com.termux" ] && [ "${TERMUX_APP__PACKAGE_NAME}" != "com.termux" ]; then
+		echo "[*] Translating file hierarchy from com.termux to ${TERMUX_APP__PACKAGE_NAME}..."
+		mkdir -p "${BOOTSTRAP_ROOTFS}/data/data/${TERMUX_APP__PACKAGE_NAME}"
+		cp -a "${BOOTSTRAP_ROOTFS}/data/data/com.termux/"* "${BOOTSTRAP_ROOTFS}/data/data/${TERMUX_APP__PACKAGE_NAME}/"
+		rm -rf "${BOOTSTRAP_ROOTFS}/data/data/com.termux"
+
+		echo "[*] Updating symlinks and configuration paths..."
+		while read -r -d '' link; do
+			target=$(readlink "$link")
+			if [[ "$target" == *"/data/data/com.termux"* ]]; then
+				new_target="${target//\/data\/data\/com.termux/\/data\/data\/${TERMUX_APP__PACKAGE_NAME}}"
+				ln -sf "$new_target" "$link"
+			fi
+		done < <(find "${BOOTSTRAP_ROOTFS}/${TERMUX_PREFIX}" -type l -print0)
+
+		find "${BOOTSTRAP_ROOTFS}/${TERMUX_PREFIX}/etc" "${BOOTSTRAP_ROOTFS}/${TERMUX_PREFIX}/var" -type f -exec sed -i "s@/data/data/com.termux@/data/data/${TERMUX_APP__PACKAGE_NAME}@g" {} + 2>/dev/null || true
+	fi
 
 	# Add termux bootstrap second stage files
 	add_termux_bootstrap_second_stage_files "$package_arch"

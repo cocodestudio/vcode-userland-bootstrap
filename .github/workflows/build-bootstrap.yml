@@ -26,8 +26,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils jq zip xz-utils curl
+
       - name: Make scripts executable
-        run: chmod +x scripts/*.sh
+        run: chmod -R +x scripts/
 
       - name: Build bootstrap archive for ${{ matrix.arch }}
         run: ./scripts/build-bootstrap.sh ${{ matrix.arch }}
@@ -58,6 +63,7 @@ jobs:
           mkdir -p release-assets
           find downloaded-artifacts -type f -name "bootstrap-*.tar.gz" -exec cp {} release-assets/ \;
           find downloaded-artifacts -type f -name "bootstrap-*.tar.gz.sha256" -exec cp {} release-assets/ \;
+          find downloaded-artifacts -type f -name "bootstrap-*.zip" -exec cp {} release-assets/ \;
           cd release-assets
           sha256sum bootstrap-*.tar.gz > SHA256SUMS.txt
           echo "Generated SHA256SUMS.txt:"
