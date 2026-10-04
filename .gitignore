@@ -1,0 +1,14 @@
+# Build and package output
+build/
+build-bootstraps/
+output/
+*.tar.gz
+*.tar.xz
+*.zip
+*.sha256
+*.deb
+
+# Logs and scratch files
+*.log
+.DS_Store
+Thumbs.db

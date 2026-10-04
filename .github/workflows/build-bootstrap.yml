@@ -1,0 +1,87 @@
+name: Build VCode Bootstrap Archives
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-bootstrap:
+    name: Build Bootstrap (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, arm, x86_64, i686]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Build bootstrap archive for ${{ matrix.arch }}
+        run: ./scripts/build-bootstrap.sh ${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-${{ matrix.arch }}
+          path: output/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-bootstrap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+
+      - name: Consolidate release assets & calculate checksums
+        id: prepare-assets
+        run: |
+          mkdir -p release-assets
+          find downloaded-artifacts -type f -name "bootstrap-*.tar.gz" -exec cp {} release-assets/ \;
+          find downloaded-artifacts -type f -name "bootstrap-*.tar.gz.sha256" -exec cp {} release-assets/ \;
+          cd release-assets
+          sha256sum bootstrap-*.tar.gz > SHA256SUMS.txt
+          echo "Generated SHA256SUMS.txt:"
+          cat SHA256SUMS.txt
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: VCode Desktop Userland ${{ github.event.inputs.version || github.ref_name }}
+          body: |
+            ## VCode Rootless Linux Userland Bootstrap
+            Official pre-compiled Bionic bootstrap archives for **VCode** (`com.cocode.vcode.ide`).
+
+            ### Architecture Coverage
+            - `bootstrap-aarch64.tar.gz` (ARM 64-bit / `arm64-v8a`)
+            - `bootstrap-arm.tar.gz` (ARM 32-bit / `armeabi-v7a`)
+            - `bootstrap-x86_64.tar.gz` (Intel/AMD 64-bit)
+            - `bootstrap-i686.tar.gz` (Intel/AMD 32-bit)
+
+            ### Integrity & Verification
+            Every archive includes an individual `.sha256` file and is indexed in `SHA256SUMS.txt`.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
