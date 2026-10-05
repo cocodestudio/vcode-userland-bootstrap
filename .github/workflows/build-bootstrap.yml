@@ -29,7 +29,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y binutils jq zip xz-utils curl
+          sudo apt-get install -y binutils jq zip xz-utils curl tar gzip
 
       - name: Make scripts executable
         run: chmod -R +x scripts/
@@ -77,7 +77,7 @@ jobs:
           name: VCode Desktop Userland ${{ github.event.inputs.version || github.ref_name }}
           body: |
             ## VCode Rootless Linux Userland Bootstrap
-            Official pre-compiled Bionic bootstrap archives for **VCode** (`com.cocode.vcode.ide`).
+            Official rootless PRoot Linux bootstrap archives for **VCode** (`com.cocode.vcode.ide`) based on Alpine Linux.
 
             ### Architecture Coverage
             - `bootstrap-aarch64.tar.gz` (ARM 64-bit / `arm64-v8a`)
@@ -86,7 +86,7 @@ jobs:
             - `bootstrap-i686.tar.gz` (Intel/AMD 32-bit)
 
             ### Integrity & Verification
-            Every archive includes an individual `.sha256` file and is indexed in `SHA256SUMS.txt`.
+            Every archive includes an individual `.sha256` checksum file and is indexed in `SHA256SUMS.txt`.
           draft: false
           prerelease: false
         env:
